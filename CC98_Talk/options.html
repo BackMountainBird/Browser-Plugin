@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>CC98 Talk 选项</title>
+        <style>
+            body {
+                font-family: Arial, Tahoma, 微软雅黑;
+                font-size: 12px;
+                background: white;
+                color: #222;
+            }
+            h1 {
+                text-align: center;
+            }
+            .foot, .line {
+                border-top:#ddd solid 1px;
+                color:#888;
+                text-align:center;
+                font-size: 14px;
+                position: absolute;
+                bottom: 0px;
+                right: 0px;
+            }
+            .slider {
+                width: 500px;
+                height: 10px;
+                margin: 20px 0px;
+            }
+            .fillParent{
+                width:100%;
+                height:100%;
+                display:block;
+                vertical-align: middle;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body onload="loadOptions()">
+        <h1>CC98 Talk 选项</h1>
+        <div class="line"></div>
+        <div align="center">
+            <span>每页记录条数: &nbsp;</span>
+            <input id="sliderItemsPerPage" type="range" class="slider" min="5" max="64" 
+                   onchange="lblItemsPerPage.innerHTML=sliderItemsPerPage.value;"/>
+            <span id="lblItemsPerPage" />
+        </div>
+        <h1></h1>
+        <div align="center">
+            <input type="checkbox" checked=""  id="checkBeep"/>
+            <span>是否开启音乐提示</span>
+            &nbsp;
+            &nbsp;
+            <input type="checkbox" checked="" id="checkParseUbb"/>
+            <span>是否开启UBB解析</span>
+            &nbsp;
+            &nbsp;
+            <input type="checkbox"  id="checkShowImg"/>
+            <span>是否显示图片</span>
+        </div>
+        <h1></h1>
+        <h1>进阶选项(需要重启浏览器)</h1>
+        <div align="center">
+            <span>消息抓取间隔： &nbsp;</span>
+            <input id="inputFetchInterval" type="text" class="digit" maxlength="7" value="0" 
+                   onkeyup="examineInput('inputFetchInterval')"
+                   onblur="examineInput('inputFetchInterval')"
+                   onafterpaste="examineInput('inputFetchInterval')"/>
+            <span>毫秒</span>
+            &nbsp; &nbsp; &nbsp; &nbsp;
+            <span>消息分发间隔： &nbsp;</span>
+            <input id="inputDispatchInterval" type="text" class="digit" maxlength="7" value="0"
+                   onkeyup="examineInput('inputDispatchInterval')"
+                   onblur="examineInput('inputDispatchInterval')"
+                   onafterpaste="examineInput('inputDispatchInterval')"/>
+            <span>毫秒</span>
+        </div>
+        <h1></h1>
+        <div align="center">
+            <input id="btnSaveOption" type="button" onclick="saveOptions()" value="保存设置"/>
+            &nbsp;&nbsp;
+            <input id="btnResetOption"type="button" onclick="resetOptions()" value="重置为默认"/>
+        </div>
+        <div class="line"></div>
+        <hr/>
+        <h1>帮助</h1>
+        <div class="fillParent">
+            请访问论坛。
+        </div>
+        <p class="foot">CC98 Talk by <var>whx123m@yahoo.cn</var></p>
+        <script>
+
+            var sliderItemsPerPage = document.getElementById('sliderItemsPerPage');
+            var lblItemsPerPage = document.getElementById('lblItemsPerPage');
+            var btnSaveOption = document.getElementById('btnSaveOption');
+            var btnResetOption = document.getElementById('btnResetOption');
+            var inputDispatchInterval = document.getElementById('inputDispatchInterval');
+            var inputFetchInterval = document.getElementById('inputFetchInterval');
+            var checkBeep=document.getElementById('checkBeep');
+            var checkParseUbb=document.getElementById('checkParseUbb');
+            var checkShowImg=document.getElementById('checkShowImg');
+            
+            var background = chrome.extension.getBackgroundPage();
+
+            function examineInput(id){
+                var src=document.getElementById(id);
+                src.value=src.value.replace(/\D/gi, "");
+                if(src.value<100||src.value>=3600000)
+                    btnSaveOption.setAttribute('disabled', '');
+                else
+                    btnSaveOption.removeAttribute('disabled');
+            }
+
+            function resetOptions(){
+                checkBeep.checked=true;
+                checkParseUbb.checked=true;
+                checkShowImg.checked=false;
+                sliderItemsPerPage.value = 24;
+                lblItemsPerPage.innerHTML = 24;
+                inputFetchInterval.value = 2000;
+                inputDispatchInterval.value = 6000;
+
+                saveOptions();
+            }
+            
+            function saveOptions() {
+                background.saveSetting("isBeep",checkBeep.checked);
+                background.saveSetting("isParseUbb",checkParseUbb.checked);
+                background.saveSetting("isShowImg",checkShowImg.checked);
+
+                var value = sliderItemsPerPage.value;
+                lblItemsPerPage.innerHTML = value;
+                background.saveSetting("itemsPerPage", value);
+                    
+                background.saveSetting("fetchInterval", inputFetchInterval.value);
+                background.saveSetting("dispatchInterval", inputDispatchInterval.value);
+            }
+
+            function loadOptions() {
+                if (window.localStorage == null) {
+                    alert("LocalStorage must be enabled for changing options.");
+                    sliderItemsPerPage.setAttribute('disabled', '');
+                    return;
+                }
+
+                
+                checkBeep.checked=background.getSetting("isBeep","true")=="true";
+                checkParseUbb.checked=background.getSetting("isParseUbb","true")=="true";
+                checkShowImg.checked=background.getSetting("isShowImg","false")=="true";
+
+                var itemsPerPage = background.getSetting('itemsPerPage', 24);
+                sliderItemsPerPage.value = itemsPerPage;
+                lblItemsPerPage.innerHTML = itemsPerPage;
+
+                var fetchInterval = background.getSetting('fetchInterval', 2000);
+                inputFetchInterval.value = fetchInterval;
+
+                var dispatchInterval = background.getSetting('DispatchInterval',6000);
+                inputDispatchInterval.value = dispatchInterval;
+            }
+
+        </script>
+    </body>
+</html>

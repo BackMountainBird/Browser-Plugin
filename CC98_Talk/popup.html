@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>CC98_Talk</title>
+        <link rel="stylesheet" href="popup.css" type="text/css">
+        <script type="text/javascript" src="ajaxpool.js"></script>
+        <script type="text/javascript">
+            chrome.browserAction.setIcon({
+                "path":"images/Talk32.png"
+            });
+            var background = chrome.extension.getBackgroundPage();
+        </script>
+    </head>
+    <body onload="update();">
+        <div>
+            <div id='configBox' style="display:none;">
+                <button onclick='++sliderPageIndex.value;updatePage();' id='btnNextPage'>下一页</button>
+                <button onclick='--sliderPageIndex.value;updatePage();' id='btnPrevPage'>上一页</button>
+                <input id="sliderPageIndex" type="range" min="0" max="0" value="0" onchange="updatePage();" />
+                <span id='lblPageIndex'></span
+                <form>
+                    <input type="radio" checked name='mailBox' onclick="mailBoxType='in' ;updateFriend();" id='btnInMail'>收件箱
+                    <input type="radio" name='mailBox' onclick="mailBoxType='out';updateFriend();" id='btnOutMail'>发件箱
+                </form>
+                <button onclick='deleteMessages();' id='btnDelete'>删除</button>
+                &nbsp;
+                <button onclick='checkAllMessage();' id="btnCheckAll">所有设为已回复</button>
+                <select id='selFriends' onchange="updateFriend();">
+                    <option value=""></option>
+                </select>
+                <span for="selFriends" id="lblAccount"></span>
+                <hr>
+            </div>
+            <div id="sendMessage" style="display:none">
+
+            </div>
+            <h4 id='title'></h4>
+            <table id='SMSBox'></table>
+        </div>
+        <script type="text/javascript">
+            var mailBoxType='in';
+            var where='WHERE type = ? and host = ?';
+            var pageIndex=0;
+            var loggedinAccount=null;
+            var values=[mailBoxType,null];
+            var isMessageSending=false;
+            
+            var pageIndex=background.getSetting("pageCount",0);
+            
+            var inMailBtn=document.getElementById('btnInMail');
+            var outMailBtn=document.getElementById('btnOutMail');
+            var deleteBtn=document.getElementById('btnDelte');
+
+            var smsSection=document.getElementById('SMSBox');
+            var configSection=document.getElementById('configBox');
+            var friendsSel=document.getElementById('selFriends');
+            var btnPrevPage = document.getElementById('btnPrevPage');
+            var btnNextPage = document.getElementById('btnNextPage');
+            var sliderPageIndex = document.getElementById('sliderPageIndex');
+
+            var sendMessageDiv=document.getElementById("sendMessage");
+
+            document.onmouseup=function(e){
+                if((e.keyCode==0)&&(e.button==2))
+                    updateFriend();
+//                if((e.keyCode==0)&&(e.button==1))
+//                    newMsgWin();
+            }
+            function enableButton(button, enabled) {
+                if (enabled)
+                    button.removeAttribute('disabled');
+                else
+                    button.setAttribute('disabled', '');
+            }
+            
+            function removeElement(_element){
+                if(_element){
+                    var _parentElement = _element.parentNode;
+                    if(_parentElement){
+                        _parentElement.removeChild(_element);
+                    }
+                }
+            }
+
+            function checkAllMessage(){
+                var friend = decodeURIComponent(selFriends.value);
+                if (friend.length == 0) friend = '所有未回复信息'; else friend = '来自"' + friend +'"的未回复信息';
+                if (confirm('真的要将' + friend + '设为已回复吗?')) {
+                    chrome.extension.sendRequest({
+                        task: "message_check_all",
+                        values: []
+                    });
+                    setTimeout(updateFriend, 100);
+                }
+            }
+            
+            function update(){
+                //configSection.innerHTML="正在生成";
+                //smsSection.style.display="none";
+                enableButton(inMailBtn,false);
+                enableButton(outMailBtn,false);
+                
+                chrome.cookies.get({
+                    url:"http://www.cc98.org",
+                    name:"aspsky"
+                },function(cookie){
+                    if(cookie){
+                        loggedinAccount=cookie.value.match(/username=([^&;]*)/)[1];
+                        document.getElementById("lblAccount").innerHTML=decodeURIComponent(loggedinAccount);
+                        background.queryFriends([loggedinAccount]);
+                        setTimeout(reloadFriend, 100);
+                    }else{
+                        loggedinAccount=document.getElementById("lblAccount").innerHTML="无用户";
+                        smsSection.innerHTML="您未登录。";
+                    }
+                });
+            }
+
+            function reloadFriend(){
+                var html=background.document.friendsHTML;
+                if(html!=undefined){
+                    friendsSel.innerHTML = "<option value=''>(所有记录)</option>" + html;
+                    friendsSel.value='';
+                    updateFriend();
+                    configSection.style.display="block";
+                    smsSection.style.display="block";
+                }else{
+                    setTimeout(reloadFriend, 100);
+                }
+            }
+            
+            function updateFriend(){
+                var friend=friendsSel.value;
+
+                if(friend.length==0){
+                    where='WHERE type = ? and host = ?';
+                    values=[mailBoxType,loggedinAccount];
+                }else{
+                    where='WHERE type = ? and host = ? and target = ?';
+                    values=[mailBoxType,loggedinAccount,friend];
+                }
+                document.getElementById('title').innerHTML='';
+                pageIndex=null;
+                updatePage()
+            }
+            function updatePage(){
+                if(sliderPageIndex.value==pageIndex) return;
+                pageIndex=parseInt(sliderPageIndex.value);
+                document.getElementById('lblPageIndex').innerHTML='第'+(pageIndex+1)+'页';
+                
+                enableButton(btnNextPage, sliderPageIndex.value < sliderPageIndex.max );
+                enableButton(btnPrevPage, sliderPageIndex.value > 0);
+
+                queryMessage();
+
+            }
+
+            function queryMessage() {
+                enableButton(btnPrevPage, false);
+                enableButton(btnNextPage, false);
+
+                background.queryMessages(where, values, pageIndex);
+                setTimeout(updateView, 100);
+            }
+
+            function updateView() {
+                var html = background.document.viewHTML;
+                if (html != undefined) {
+                    // replace
+                    if(!(background.getSetting("isShowImg","false")=="true"))
+                        html = html.replace(/<img[^>]*>/g, '<span class="emot">[图片]</span>');
+                    smsSection.innerHTML = html;
+                    // update slider range
+                    sliderPageIndex.max = background.document.pageCount;
+                    // decide whether [next page] button is available
+                    enableButton(btnNextPage, sliderPageIndex.value < sliderPageIndex.max );
+                    enableButton(btnPrevPage, sliderPageIndex.value > 0);
+                    enableButton(inMailBtn,true);
+                    enableButton(outMailBtn,true);
+                } else {
+                    smsSection.innerHTML = 'Waiting';
+                    setTimeout(updateView, 100);
+                }
+            }
+
+            function deleteMessages(){
+                var friend = decodeURIComponent(selFriends.value);
+                var mailBox=((mailBoxType=="in")?"收件箱":"发件箱");
+                if (friend.length == 0) friend = mailBox+'的站短记录'; else friend = mailBox+'中与"' + friend +'"相关的全部站短记录';
+                if (confirm('真的要删除' + friend + '吗?')) {
+                    background.deleteMessages(where, values);
+                    update('正在删除...');
+                }
+            };
+
+            //show the fase reply section
+            var titleTr;var contentTr;var targetsTr;
+            function msgWin(event){
+                var src=event.currentTarget.parentNode;
+                var toggle=titleTr&&(titleTr.rowIndex==src.rowIndex+1);
+                removeElement(titleTr);
+                removeElement(targetsTr);
+                removeElement(contentTr);
+                if(toggle) return;
+                titleTr=smsSection.insertRow(src.rowIndex+1);
+                titleTr.className='msgTr';
+                targetsTr=smsSection.insertRow(src.rowIndex+2);
+                targetsTr.className='msgTr';
+                contentTr=smsSection.insertRow(src.rowIndex+3);
+                contentTr.className='msgTr';
+                titleTr.innerHTML="<td ColSpan=4><input type='text' tabindex='1' id='txtTitle' value='"+src.childNodes[0].innerText+
+                    "'/></td><td RowSpan=2 id='messageId'style='display:none'>"+src.childNodes[4].innerText+"</td>";
+                targetsTr.innerHTML="<td ColSpan=4><input type='text' tabindex='2' id='txtTargets' value='"+src.childNodes[1].innerText+"'/></td>"
+                contentTr.innerHTML="<td ColSpan=4><textarea tabindex='3' id='txtContent' rows='10'>"+src.childNodes[2].innerText+
+                    "</textarea></td>";
+                document.addEventListener("keypress",dispatchEvent,false);
+            }
+            var newMsgToggle=0;
+            function newMsgWin(){
+                removeElement(titleTr);
+                removeElement(targetsTr);
+                removeElement(contentTr);
+                if(newMsgToggle) {
+                    newMsgToggle=0;
+                    return;
+                }
+                smsSection.innerHTML.replace(/<span.*?<\/span>/,"");
+                titleTr=smsSection.insertRow(0);
+                titleTr.className='fillParent';
+                targetsTr=smsSection.insertRow(1);
+                targetsTr.className='fillParent';
+                contentTr=smsSection.insertRow(2);
+                contentTr.className='fillParent';
+
+                titleTr.innerHTML="<td ColSpan=4><input type='text' tabindex='1' id='txtTitle' value='"+""+
+                    "'/></td><td RowSpan=2 id='messageId'style='display:none'>"+""+"</td>";
+                targetsTr.innerHTML="<td ColSpan=4><input type='text' tabindex='2' id='txtTargets' value='"+""+"'/></td>"
+                contentTr.innerHTML="<td ColSpan=4><textarea tabindex='3' id='txtContent' rows='10'>"+""+
+                    "</textarea></td>";
+                document.addEventListener("keypress",dispatchEvent,false);
+            }
+
+            function dispatchEvent(e){
+                var dummy;
+                if(!isMessageSending){
+                    if(e.keyCode == 10 && e.ctrlKey)
+                        sendMsg();
+                }
+            }
+            //send the fast reply
+            function sendMsg(){
+                try{
+                    var touser=document.getElementById('txtTargets').value;
+                    var title=document.getElementById('txtTitle').value;
+                    var message=document.getElementById('txtContent').value;
+                    var id=document.getElementById('messageId').innerText;
+                }catch(e){
+                    return;
+                }
+                isMessageSending=true;
+                document.getElementById('txtTargets').setAttribute('disabled', '');
+                document.getElementById('txtTitle').setAttribute('disabled', '');
+                document.getElementById('txtContent').setAttribute('disabled', '');
+                message.replace(/\s*/g, "+");
+                //alert(touser+title+message);
+                background.ajaxUrlManager.push("http://www.cc98.org/messanger.asp?action=send","POST",
+                "touser="+encodeURIComponent(touser)+"&font=&title="+encodeURIComponent(title)+"&message="+encodeURIComponent(message),function(HTML){
+                    var sucMsg=/tablebody1>[^]*?<b>([^:].*?)<\/b>/.exec(HTML);
+                    if(sucMsg&&sucMsg[1]&&(sucMsg[1]=="操作成功：")){
+                        chrome.cookies.get({
+                            url:"http://www.cc98.org",
+                            name:"aspsky"
+                        },function(cookie){
+                            var sender=cookie.value.match(/username=([^&;]*)/)[1];
+                            chrome.extension.sendRequest({
+                                task: "message_store",
+                                values: [null, "out",1, encodeURIComponent(title),
+                                    encodeURIComponent(sender),encodeURIComponent(touser) , background.getLocalTime(),encodeURIComponent(message)]
+                            });
+                        });
+                        chrome.extension.sendRequest({
+                            task: "message_check",
+                            values:[id]
+                        });
+                        setTimeout(updateFriend, 100);
+                        isMessageSending=false;
+                    }else{
+                        var errorMsg=/<li>([^]*?)<br>/g.exec(HTML)[1];
+                        background.show_notification("images/redcross.png","出错鸟！",errorMsg);
+                        document.getElementById('txtTargets').removeAttribute('disabled', '');
+                        document.getElementById('txtTitle').removeAttribute('disabled', '');
+                        document.getElementById('txtContent').removeAttribute('disabled','');
+                        isMessageSending=false;
+                    }
+                });
+                background.ajaxUrlManager.exe();
+            }
+        </script>
+    </body>
+</html>
+
+
